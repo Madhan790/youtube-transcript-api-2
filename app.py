@@ -15,38 +15,48 @@ def home():
 # Transcript Route
 @app.route("/transcript")
 def get_transcript():
-    # ----- API KEY REQUIRED ----- #
+
+    # -------- API KEY CHECK -------- #
     client_key = request.headers.get("X-API-KEY")
     if client_key != API_KEY:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
-    video_id = request.args.get("id") or request.args.get("v")
+    # now supports id, v, video_id ✔
+    video_id = (
+        request.args.get("id")
+        or request.args.get("v")
+        or request.args.get("video_id")
+    )
 
     if not video_id:
-        return jsonify({"success": False, "error": "Use /transcript?id=VIDEO_ID"}), 400
+        return jsonify({"success": False,
+                        "error": "Missing parameter. Use /transcript?id=VIDEO_ID"}), 400
 
     try:
         api = YouTubeTranscriptApi()
         transcripts = api.list(video_id)
 
-        # ---- Language priority ---- #
+        # -------- Language priority -------- #
         t = None
-        # Manual CC preferred
+
+        # 1. Prefer Manual CC if exists
         for tc in transcripts:
             if not tc.is_generated:
                 t = tc; break
-        # Then Auto CC
+
+        # 2. Then Auto CC
         if t is None:
             for tc in transcripts:
                 if tc.is_generated:
                     t = tc; break
-        # Fallback
+
+        # 3. Fallback first available
         if t is None:
             t = list(transcripts)[0]
 
         data = t.fetch()
 
-        # FINAL FORMAT → text+start+duration+language
+        # -------- Final Output Format -------- #
         subtitles = [{
             "text": x.text,
             "start": x.start,
@@ -78,5 +88,5 @@ def get_transcript():
 # -------- Railway Entry -------- #
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f"🚀 Server running at port {port}")
+    print(f"🚀 Server running on port {port}")
     app.run(host="0.0.0.0", port=port)

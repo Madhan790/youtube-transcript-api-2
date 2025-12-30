@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+import os
 
 app = Flask(__name__)
 
@@ -16,58 +17,51 @@ def get_transcript():
     print(f"[LOG] Request video_id = {video_id}", flush=True)
 
     if not video_id:
-        print("[ERROR] Missing video ID", flush=True)
+        print("[ERROR] Missing ID", flush=True)
         return jsonify({"error": "Use /transcript?id=VIDEOID"}), 400
 
     try:
-        print("[STEP 1] Initializing API client", flush=True)
+        print("[STEP1] Creating YouTubeTranscriptApi...", flush=True)
         api = YouTubeTranscriptApi()
 
-        print("[STEP 2] Fetching transcript list...", flush=True)
+        print("[STEP2] Getting transcripts list...", flush=True)
         transcripts = api.list(video_id)
-        print(f"[LOG] Available transcripts: {transcripts._languages}", flush=True)
+        print("[LOG] Languages:", transcripts._languages, flush=True)
 
-        print("[STEP 3] Selecting best transcript option", flush=True)
+        print("[STEP3] Selecting language...", flush=True)
         try:
             t = transcripts.find_manually_created_transcript(transcripts._languages)
-            print("[LOG] Selected: Manual transcript", flush=True)
+            print("[LOG] Manual used", flush=True)
         except:
             try:
                 t = transcripts.find_generated_transcript(transcripts._languages)
-                print("[LOG] Selected: Auto-generated transcript", flush=True)
+                print("[LOG] Auto-generated used", flush=True)
             except:
                 t = list(transcripts)[0]
-                print("[LOG] Selected fallback transcript", flush=True)
+                print("[LOG] Fallback to first transcript", flush=True)
 
-        print("[STEP 4] Fetching transcript text...", flush=True)
-        transcript = t.fetch()
+        print("[STEP4] Fetching transcript...", flush=True)
+        data = t.fetch()
+        result = [{"text": x.text, "start": x.start, "duration": x.duration} for x in data]
 
-        print("[STEP 5] Building JSON response", flush=True)
-        result = [{"text": item.text, "start": item.start, "duration": item.duration} for item in transcript]
-
-        print(f"[SUCCESS] Returning transcript for {video_id} | Lang: {t.language_code}", flush=True)
-
+        print("[SUCCESS] Transcript returned", flush=True)
         return jsonify({
             "video_id": video_id,
             "language": t.language_code,
             "generated": t.is_generated,
             "transcript": result
-        }), 200
+        })
 
-    except TranscriptsDisabled:
-        print("[ERROR] Transcript disabled", flush=True)
+    except (TranscriptsDisabled, NoTranscriptFound):
+        print("[ERROR] No transcript", flush=True)
         return jsonify({"error": "No transcript available"}), 404
-
-    except NoTranscriptFound:
-        print("[ERROR] No transcript found", flush=True)
-        return jsonify({"error": "Transcript not found"}), 404
-
     except Exception as e:
-        print("[CRASH] Unexpected error:", str(e), flush=True)
+        print("[CRASH]", e, flush=True)
         return jsonify({"error": str(e)}), 500
 
 
-# -------------------- SERVER ENTRY POINT -------------------- #
+# === RUN SERVER USING RAILWAY PORT ===
 if __name__ == "__main__":
-    print("[SERVER] Starting Flask on 0.0.0.0:5000", flush=True)
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.getenv("PORT", 5000))
+    print(f"[SERVER] Running on port {port}", flush=True)
+    app.run(host="0.0.0.0", port=port)

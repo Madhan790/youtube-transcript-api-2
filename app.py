@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import os
 
@@ -63,12 +63,15 @@ def get_transcript():
         result = [{"text": x.text, "start": x.start, "duration": x.duration} for x in data]
 
         print("[SUCCESS] Transcript ready", flush=True)
-        return jsonify({
-            "video_id": video_id,
-            "language": t.language_code,
-            "generated": t.is_generated,
-            "transcript": result
-        }), 200
+        return Response(
+    json.dumps({
+        "video_id": video_id,
+        "language": t.language_code,
+        "generated": t.is_generated,
+        "transcript": result
+    }, ensure_ascii=False),               # <-- FIX
+    mimetype="application/json"
+), 200
 
     except (TranscriptsDisabled, NoTranscriptFound):
         print("[ERROR] Transcript not available", flush=True)

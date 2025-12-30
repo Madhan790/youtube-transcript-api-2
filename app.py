@@ -6,13 +6,16 @@ API_KEY = "x9J2f8S2pA9W-qZvB"
 
 app = Flask(__name__)
 
+# Root
 @app.route("/")
 def home():
     return {"status": "YouTube Transcript API Active 🚀", "auth": "required"}
 
+
+# Transcript Route
 @app.route("/transcript")
 def get_transcript():
-    # -------- API KEY CHECK -------- #
+    # ----- API KEY REQUIRED ----- #
     client_key = request.headers.get("X-API-KEY")
     if client_key != API_KEY:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
@@ -26,13 +29,13 @@ def get_transcript():
         api = YouTubeTranscriptApi()
         transcripts = api.list(video_id)
 
-        # ---- Choose best transcript ---- #
+        # ---- Language priority ---- #
         t = None
-        # Manual first
+        # Manual CC preferred
         for tc in transcripts:
             if not tc.is_generated:
                 t = tc; break
-        # Auto CC next
+        # Then Auto CC
         if t is None:
             for tc in transcripts:
                 if tc.is_generated:
@@ -43,19 +46,27 @@ def get_transcript():
 
         data = t.fetch()
 
-        subtitles = [{"text": x.text, "start": x.start, "duration": x.duration} for x in data]
+        # FINAL FORMAT → text+start+duration+language
+        subtitles = [{
+            "text": x.text,
+            "start": x.start,
+            "duration": x.duration,
+            "language": t.language_code
+        } for x in data]
 
         response_json = {
             "success": True,
-            "mode": "YTA",                        # <--- identifier of source
+            "mode": "YTA",
             "count": len(subtitles),
             "lang": t.language_code,
             "format": "manual" if not t.is_generated else "auto",
             "subtitles": subtitles
         }
 
-        return Response(json.dumps(response_json, ensure_ascii=False, indent=2),
-                        mimetype="application/json")
+        return Response(
+            json.dumps(response_json, ensure_ascii=False, indent=2),
+            mimetype="application/json"
+        )
 
     except (TranscriptsDisabled, NoTranscriptFound):
         return jsonify({"success": False, "error": "Transcript not available"}), 404
@@ -64,8 +75,8 @@ def get_transcript():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-
+# -------- Railway Entry -------- #
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f"🚀 Server running on port {port}")
+    print(f"🚀 Server running at port {port}")
     app.run(host="0.0.0.0", port=port)
